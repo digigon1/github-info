@@ -5,7 +5,9 @@
   "license": "MIT",
   "scripts": {
     "start": "npx ts-node src/index.ts",
-    "lint": "npx eslint src"
+    "lint": "npx eslint src",
+    "database-up": "docker compose -f infra/docker-compose.yaml up",
+    "database-down": "docker compose -f infra/docker-compose.yaml down"
   },
   "devDependencies": {
     "@types/node": "^18.15.11",
