@@ -1,15 +1,18 @@
 import pgPromise from "pg-promise"
 import { User } from "../types"
+import { anyToUser } from "../utils"
 
 const pgp = pgPromise()
 
 // Database singleton
 const Database = (() => {
-  let instance: pgPromise.IDatabase<object>
+  let client: pgPromise.IDatabase<object>
   
   return {
     getInstance: (): pgPromise.IDatabase<object> => {
-      if (!instance) {
+      // Init client if none exists
+      if (!client) {
+        // Fail if any env var is missing
         if (
           !process.env.DB_HOST ||
           !process.env.DB_PORT ||
@@ -20,7 +23,8 @@ const Database = (() => {
           throw new Error("Environment variables not found")
         }
 
-        instance = pgp({
+        // Init client with env vars
+        client = pgp({
           host: process.env.DB_HOST,
           port: +process.env.DB_PORT,
           user: process.env.DB_USER,
@@ -29,13 +33,15 @@ const Database = (() => {
         })
       }
       
-      return instance
+      // Return existing client
+      return client
     }
   }
 })()
 
 
 // Types
+// We only filter by location and languages, so let's only pick these
 export type SelectFields = 
   Partial<Pick<User, "location" | "languages">>
 
@@ -44,101 +50,87 @@ export type SelectFields =
 export const insertUser = async (user: User) => {
   const instance = Database.getInstance()
 
-  try {
-    const query = `
-      INSERT INTO users (
-        username,
-        name,
-        location,
-        languages,
-        full_user
-      )
-      VALUES (
-        \${username},
-        \${name},
-        \${location},
-        \${languages},
-        \${full_user}
-      )
-    `
+  // Insert query
+  // This could be moved into an insert function in DB which parses the user
+  //  object, but for such a simple solution, this would be overkill
+  const query = `
+    INSERT INTO users (
+      username,
+      name,
+      location,
+      languages,
+      full_user
+    )
+    VALUES (
+      \${username},
+      \${name},
+      \${location},
+      \${languages},
+      \${full_user}
+    )
+  `
 
-    await instance.none(query, user)
-  } catch (e) {
-    console.log("Failed while inserting user")
-
-    throw e
-  }
+  // Insert and return nothing
+  await instance.none(query, user)
 }
 
-
+// Function to check if user already exists, 
+//  avoids fetching same user more than once
 export const getUserByUsername = 
   async (username: string): Promise<User | undefined> => {
     const instance = Database.getInstance()
 
-    try {
-      const query = `
-        SELECT 
-          *
-        FROM
-          users
-        WHERE
-          username = \${username}
-      `
 
-      const maybeUser = await instance.oneOrNone(query, { username })
+    const query = `
+      SELECT 
+        *
+      FROM
+        users
+      WHERE
+        username = \${username}
+    `
 
-      return !maybeUser ? undefined : {
-        username: maybeUser.username,
-        name: maybeUser.name,
-        location: maybeUser.location,
-        languages: maybeUser.languages,
-        full_user: maybeUser.full_user
-      }
-    } catch (e) {
-      console.log("Failed while inserting user")
+    // Get either an existing user or no user
+    const maybeUser = await instance.oneOrNone(query, { username })
 
-      throw e
-    }
+    // Return undefined if user does not exist
+    return !maybeUser ? undefined : anyToUser(maybeUser)
   }
 
 
 export const selectUsers = async (filters?: SelectFields): Promise<User[]> => {
   const instance = Database.getInstance()
 
-  try {
-    let query = `
-      SELECT 
-        *
-      FROM
-        users
-    `
+  // Query builder
+  let query = `
+    SELECT 
+      *
+    FROM
+      users
+  `
 
-    const conditions = []
+  // Conditions for where
+  const conditions = []
 
-    if (filters?.location) {
-      conditions.push("location = ${location}")
-    }
-
-    if (filters?.languages?.length) {
-      conditions.push("languages @> ${languages}")
-    }
-
-    if (conditions.length) {
-      query += " WHERE "
-      query += conditions.join(" AND ")
-    }
-
-    const users = await instance.any(query, filters)
-
-    return users.map(u => ({
-      username: u.username,
-      name: u.name,
-      location: u.location,
-      languages: u.languages,
-      full_user: u.full_user
-    }))
-  } catch (e) {
-    console.log("Failed selecting users")
-    throw e
+  // If we get a location, add it
+  if (filters?.location) {
+    conditions.push("location ILIKE '%${location:value}%'")
   }
+
+  // If we get a language list, add it
+  if (filters?.languages?.length) {
+    conditions.push("languages @> ${languages}")
+  }
+
+  // Add where if we have conditions
+  if (conditions.length) {
+    query += " WHERE "
+    query += conditions.join(" AND ")
+  }
+
+  // We can have any number of results
+  const users = await instance.any(query, filters)
+
+  // Map result for type checking
+  return users.map(anyToUser)
 }
