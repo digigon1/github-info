@@ -3,7 +3,7 @@
 ## Requirements
 
 - PostgreSQL or Docker
-- NodeJS
+- NodeJS (version 17.0.0+)
 - Yarn
 
 ---

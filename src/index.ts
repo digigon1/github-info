@@ -12,13 +12,17 @@ const handleFetch = async (rl: readline.Interface) => {
   const username = line.trim()
   
   // Fetch and store user
-  const user = await fetchUser(username)
-
-  // Display result
-  console.log()
-  console.log("===== USER =====")
-  console.log(userToString(user))
-  console.log()
+  try {
+    const user = await fetchUser(username)
+  
+    // Display result
+    console.log()
+    console.log("===== USER =====")
+    console.log(userToString(user))
+    console.log()
+  } catch (e) {
+    console.error(e)
+  }
 }
 
 const handleSearch = async (rl: readline.Interface) => {
@@ -45,8 +49,8 @@ const handleSearch = async (rl: readline.Interface) => {
 
   // Search, but only send args if they are defined
   const users = await searchUsers({
-    languages: languages.length ? languages : undefined,
-    location: location.length ? location : undefined,
+    languages: languages.length !== 0 ? languages : undefined,
+    location: location.length !== 0 ? location : undefined,
   })
 
   // Display results
