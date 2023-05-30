@@ -1,0 +1,11 @@
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: github-info
+    ports:
+      - 5432:5432
+    volumes:
+      - ../migrations/initial.sql:/docker-entrypoint-initdb.d/initial.sql
